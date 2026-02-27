@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanças Pessoais</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --card:     #1a1d27;
+    --card2:    #22263a;
+    --border:   #2e3250;
+    --text:     #e8eaf6;
+    --muted:    #7b82a8;
+    --green:    #4ade80;
+    --red:      #f87171;
+    --blue:     #60a5fa;
+    --purple:   #a78bfa;
+    --yellow:   #fbbf24;
+    --accent:   #6366f1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+  header span { font-size: 0.8rem; color: var(--muted); }
+
+  .month-nav { display: flex; align-items: center; gap: 12px; }
+  .month-nav button { background: var(--card2); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: background .2s; }
+  .month-nav button:hover { background: var(--accent); }
+  .month-nav span { font-weight: 600; min-width: 100px; text-align: center; }
+
+  main { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .card .value { font-size: 1.6rem; font-weight: 700; }
+  .card .sub { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+  .green { color: var(--green); }
+  .red   { color: var(--red); }
+  .blue  { color: var(--blue); }
+  .purple{ color: var(--purple); }
+  .yellow{ color: var(--yellow); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media(max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .panel h2 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 16px; }
+
+  .chart-wrap { position: relative; height: 220px; display: flex; align-items: center; justify-content: center; }
+
+  /* Receitas breakdown */
+  .receita-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .receita-row:last-child { border-bottom: none; }
+  .receita-row .name { font-size: 0.9rem; }
+  .receita-row .val  { font-size: 0.95rem; font-weight: 600; color: var(--green); }
+
+  /* Transações */
+  .txn-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+  .txn-list::-webkit-scrollbar { width: 4px; }
+  .txn-list::-webkit-scrollbar-track { background: transparent; }
+  .txn-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .txn { display: flex; justify-content: space-between; align-items: center; background: var(--card2); border-radius: 10px; padding: 10px 14px; }
+  .txn .info .desc { font-size: 0.9rem; font-weight: 500; }
+  .txn .info .meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .txn .amount { font-size: 0.95rem; font-weight: 700; }
+
+  .loading { text-align: center; color: var(--muted); padding: 40px; font-size: 0.9rem; }
+  .error   { text-align: center; color: var(--red);   padding: 40px; font-size: 0.9rem; }
+
+  .badge { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
+  .badge-gasto   { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge-receita { background: rgba(74,222,128,.15);  color: var(--green); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💰 Finanças Pessoais</h1>
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">‹</button>
+    <span id="monthLabel">—</span>
+    <button onclick="changeMonth(1)">›</button>
+  </div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><div class="label">Saldo do Mês</div><div class="value" id="saldo">—</div><div class="sub" id="saldoSub"></div></div>
+    <div class="card"><div class="label">Total Receitas</div><div class="value green" id="receitas">—</div></div>
+    <div class="card"><div class="label">Total Gastos</div><div class="value red" id="gastos">—</div></div>
+    <div class="card"><div class="label">Transações</div><div class="value blue" id="qtdTxn">—</div><div class="sub">no mês</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Gastos por Categoria</h2>
+      <div class="chart-wrap"><canvas id="chartCat"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Receitas do Mês</h2>
+      <div id="receitaBreakdown"><div class="loading">Carregando...</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Últimas Transações</h2>
+    <div class="txn-list" id="txnList"><div class="loading">Carregando...</div></div>
+  </div>
+</main>
+
+<script>
+const SHEET_ID = '1ct-hGAhuH8UT8d6VUF55NrGq9fRYVqoA22Vqh1P-Vu0';
+const BASE_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
+
+let currentDate = new Date();
+let chartCat = null;
+let allTxn = [];
+
+const COLORS = ['#6366f1','#60a5fa','#4ade80','#fbbf24','#f87171','#a78bfa','#34d399','#fb923c','#e879f9','#38bdf8','#f472b6','#a3e635'];
+
+function mesRef() {
+  return currentDate.getFullYear() + '-' + String(currentDate.getMonth()+1).padStart(2,'0');
+}
+
+function fmtMes(ref) {
+  const [y,m] = ref.split('-');
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return meses[parseInt(m)-1] + '/' + y;
+}
+
+function fmtBRL(v) {
+  return 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function changeMonth(dir) {
+  currentDate.setMonth(currentDate.getMonth() + dir);
+  render();
+}
+
+async function fetchSheet(name) {
+  const url = BASE_URL + encodeURIComponent(name);
+  const res  = await fetch(url);
+  const text = await res.text();
+  const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?$/, ''));
+  return json.table;
+}
+
+function tableToRows(table) {
+  if (!table || !table.rows) return [];
+  return table.rows.map(r => r.c ? r.c.map(c => c ? (c.f || c.v) : '') : []);
+}
+
+async function loadTransacoes() {
+  const table = await fetchSheet('Transações');
+  const rows  = tableToRows(table);
+  // skip header
+  allTxn = rows.slice(1).map(r => ({
+    id:       r[0] || '',
+    data:     r[1] || '',
+    desc:     r[2] || '',
+    valor:    parseFloat(String(r[3]||'0').replace('R$','').replace(/\./g,'').replace(',','.')) || 0,
+    tipo:     r[4] || '',
+    cat:      r[5] || '',
+    subcat:   r[6] || '',
+    mesRef:   r[7] || '',
+    obs:      r[8] || ''
+  }));
+}
+
+function render() {
+  const ref = mesRef();
+  document.getElementById('monthLabel').textContent = fmtMes(ref);
+
+  const txns = allTxn.filter(t => t.mesRef === ref);
+  const gastos   = txns.filter(t => t.tipo === 'Gasto');
+  const receitas = txns.filter(t => t.tipo === 'Receita');
+
+  const totalGastos   = gastos.reduce((s,t)   => s + t.valor, 0);
+  const totalReceitas = receitas.reduce((s,t) => s + t.valor, 0);
+  const saldo = totalReceitas - totalGastos;
+
+  // Cards
+  const saldoEl = document.getElementById('saldo');
+  saldoEl.textContent = fmtBRL(saldo);
+  saldoEl.className   = 'value ' + (saldo >= 0 ? 'green' : 'red');
+  document.getElementById('saldoSub').textContent = saldo >= 0 ? 'positivo ✓' : 'negativo ✗';
+  document.getElementById('receitas').textContent = fmtBRL(totalReceitas);
+  document.getElementById('gastos').textContent   = fmtBRL(totalGastos);
+  document.getElementById('qtdTxn').textContent   = txns.length;
+
+  // Gráfico categorias
+  const catMap = {};
+  gastos.forEach(t => { catMap[t.cat] = (catMap[t.cat]||0) + t.valor; });
+  const cats = Object.keys(catMap).sort((a,b) => catMap[b]-catMap[a]);
+  const vals = cats.map(c => catMap[c]);
+
+  if (chartCat) chartCat.destroy();
+  const ctx = document.getElementById('chartCat').getContext('2d');
+  chartCat = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: cats,
+      datasets: [{ data: vals, backgroundColor: COLORS, borderWidth: 0, hoverOffset: 6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#7b82a8', font: { size: 11 }, boxWidth: 12, padding: 10 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${fmtBRL(ctx.raw)} (${Math.round(ctx.raw/totalGastos*100)}%)`
+          }
+        }
+      }
+    }
+  });
+
+  // Receitas breakdown
+  const recCats = ['Salário','Comissão','Outros'];
+  const recMap  = {};
+  receitas.forEach(t => {
+    const sub = t.subcat || t.cat;
+    const key = recCats.includes(sub) ? sub : 'Outros';
+    recMap[key] = (recMap[key]||0) + t.valor;
+  });
+  const rbEl = document.getElementById('receitaBreakdown');
+  if (receitas.length === 0) {
+    rbEl.innerHTML = '<div class="loading">Nenhuma receita no mês</div>';
+  } else {
+    rbEl.innerHTML = recCats.map(c => `
+      <div class="receita-row">
+        <span class="name">${c}</span>
+        <span class="val">${fmtBRL(recMap[c]||0)}</span>
+      </div>`).join('') +
+      `<div class="receita-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:12px">
+        <span class="name" style="font-weight:600">Total</span>
+        <span class="val">${fmtBRL(totalReceitas)}</span>
+      </div>`;
+  }
+
+  // Últimas transações (20 mais recentes)
+  const recentes = [...txns].reverse().slice(0, 20);
+  const listEl = document.getElementById('txnList');
+  if (recentes.length === 0) {
+    listEl.innerHTML = '<div class="loading">Nenhuma transação no mês</div>';
+  } else {
+    listEl.innerHTML = recentes.map(t => `
+      <div class="txn">
+        <div class="info">
+          <div class="desc">${t.desc || '—'} <span class="badge badge-${t.tipo.toLowerCase()}">${t.tipo}</span></div>
+          <div class="meta">${t.data} · ${t.cat}${t.subcat ? ' › '+t.subcat : ''}</div>
+        </div>
+        <div class="amount ${t.tipo==='Receita'?'green':'red'}">${t.tipo==='Receita'?'+':'−'} ${fmtBRL(t.valor)}</div>
+      </div>`).join('');
+  }
+}
+
+async function init() {
+  document.getElementById('txnList').innerHTML = '<div class="loading">Conectando ao Google Sheets...</div>';
+  try {
+    await loadTransacoes();
+    render();
+  } catch(err) {
+    console.error(err);
+    document.getElementById('txnList').innerHTML = `<div class="error">Erro ao carregar dados.<br><small>${err}</small></div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
